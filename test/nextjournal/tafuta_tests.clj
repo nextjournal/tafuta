@@ -80,3 +80,10 @@
                 :line "     (map parse-line lines)",
                 :file "src/nextjournal/tafuta.clj"})
              (tafuta/search "parse-line" (io/file "src/")))))))
+
+(deftest search-test-no-searcher
+  (testing "nextjournal.tafuta/search"
+    (with-redefs [tafuta/searcher-list '()]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (tafuta/search "adsfadsfasdfasdfafds" "src/")))
+      "no searcher not throwing")))

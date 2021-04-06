@@ -82,7 +82,7 @@
   Returns nil if no results are found. Raises an error for an exit code different to 0 or 1."
   [pattern dir]
   (let [dir (if (instance? java.io.File dir) (.getPath dir) dir)]
-    (when-let [searcher (find-searcher)]
+    (if-let [searcher (find-searcher)]
       (let [{:keys [exit out err]} (apply shell/sh searcher pattern dir (extra-arguments searcher))]
         (case exit
           0 (case searcher
@@ -90,4 +90,7 @@
                         (mapcat parse-ackmate))
               "rg" (parse-rg-jsonlines out))
           1 nil
-          (throw (ex-info (str searcher " exited with error code " exit) {:out out :err err})))))))
+          (throw (ex-info (str searcher " exited with error code " exit) {:out out :err err}))))
+      (throw (ex-info (str "No supported code search tool found!\n"
+                           "Please make sure you have one of the supported search tools installed.")
+                      {})))))
