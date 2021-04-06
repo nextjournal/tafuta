@@ -1,10 +1,12 @@
 (ns nextjournal.tafuta
   "A namespace for leveraging unix text search tools like \"ag\" or \"ack\"."
-  (:require [clojure.java.io :as io]
-            [clojure.java.shell :as shell]
-            [clojure.string :as str]))
+  (:require [clojure.java.shell :as shell]
+            [clojure.string :as str]
+            [jsonista.core :as json]))
 
-(def searcher-list '("ag" "ack"))
+(def searcher-list '("ag" "rg"))
+(def extra-arguments {"rg" ["--json"]
+                      "ag" ["--ackmate"]})
 
 (defn find-searcher
   "Returns the first searcher that is installed and supported by
@@ -56,15 +58,36 @@
      (map parse-line lines)
      (map #(assoc % :file file)))))
 
+(defn read-jsonlines
+  "Reads a string of jsonlines into clojure objects."
+  [s]
+  (->> (str/split s #"\n")
+       (map #(json/read-value % json/keyword-keys-object-mapper))))
+
+(defn parse-rg-jsonlines
+  "Parses jsonlines as returned by `rg` and massages them into the clojure format
+  returned by tafuta."
+  [s]
+  (let [jsonlines (read-jsonlines s)]
+    (->> (filter #(= (:type %) "match") jsonlines)
+         (map :data)
+         (map (fn [match]
+                {:line-number (:line_number match)
+                 :occurences (mapv (fn [{:keys [start end]}] [start (- end start)]) (:submatches match))
+                 :file (-> match :path :text)
+                 :line (-> match :lines :text (str/replace "\n" ""))})))))
+
 (defn search
   "Searches for `pattern` in `dir`. Uses the best available searcher installed.
   Returns nil if no results are found. Raises an error for an exit code different to 0 or 1."
   [pattern dir]
   (let [dir (if (instance? java.io.File dir) (.getPath dir) dir)]
     (when-let [searcher (find-searcher)]
-      (let [{:keys [exit out err]} (shell/sh searcher pattern dir "--ackmate")]
+      (let [{:keys [exit out err]} (apply shell/sh searcher pattern dir (extra-arguments searcher))]
         (case exit
-          0 (->> (str/split out #"\n\n")
-                 (mapcat parse-ackmate))
+          0 (case searcher
+              "ag" (->> (str/split out #"\n\n")
+                        (mapcat parse-ackmate))
+              "rg" (parse-rg-jsonlines out))
           1 nil
           (throw (ex-info (str searcher " exited with error code " exit) {:out out :err err})))))))

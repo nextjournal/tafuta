@@ -32,26 +32,51 @@
            (tafuta/parse-ackmate
             ":yarn.lock\n1;1 2: foo bar\n2;1 2,5 12: foofoo barbar")))))
 
-(deftest search-test
-  (testing "nextjournal.tafuta/search"
+(deftest search-test-ag
+  (testing "nextjournal.tafuta/search with ag"
     (is (= nil
            (tafuta/search "adsfadsfasdfasdfafds" "src/"))
         "empty results not working properly")
-    (is (= '({:line-number 24,
+    (is (= '({:line-number 26,
               :occurences [[6 10]],
               :line "(defn parse-line",
               :file "src/nextjournal/tafuta.clj"}
-             {:line-number 56,
+             {:line-number 58,
               :occurences [[10 10]],
               :line "     (map parse-line lines)",
               :file "src/nextjournal/tafuta.clj"})
            (tafuta/search "parse-line" "src/")))
-    (is (= '({:line-number 24,
+    (is (= '({:line-number 26,
               :occurences [[6 10]],
               :line "(defn parse-line",
               :file "src/nextjournal/tafuta.clj"}
-             {:line-number 56,
+             {:line-number 58,
               :occurences [[10 10]],
               :line "     (map parse-line lines)",
               :file "src/nextjournal/tafuta.clj"})
            (tafuta/search "parse-line" (io/file "src/"))))))
+
+(deftest search-test-rg
+  (testing "nextjournal.tafuta/search"
+    (with-redefs [tafuta/searcher-list '("rg")]
+      (is (= nil
+             (tafuta/search "adsfadsfasdfasdfafds" "src/"))
+          "empty results not working properly")
+      (is (= '({:line-number 26,
+                :occurences [[6 10]],
+                :line "(defn parse-line",
+                :file "src/nextjournal/tafuta.clj"}
+               {:line-number 58,
+                :occurences [[10 10]],
+                :line "     (map parse-line lines)",
+                :file "src/nextjournal/tafuta.clj"})
+             (tafuta/search "parse-line" "src/")))
+      (is (= '({:line-number 26,
+                :occurences [[6 10]],
+                :line "(defn parse-line",
+                :file "src/nextjournal/tafuta.clj"}
+               {:line-number 58,
+                :occurences [[10 10]],
+                :line "     (map parse-line lines)",
+                :file "src/nextjournal/tafuta.clj"})
+             (tafuta/search "parse-line" (io/file "src/")))))))
