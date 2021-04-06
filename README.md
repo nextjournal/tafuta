@@ -6,7 +6,7 @@ A small clojure library for searching code. It shells out to [ag](https://github
 or [ripgrep](https://github.com/BurntSushi/ripgrep) and leverages the speed of those tools.
 The results are returned as Clojure data. An example:
 
-```
+```clj
 (require '[nextjournal.tafuta :as tafuta])
 
 (tafuta/search "foo" ".")

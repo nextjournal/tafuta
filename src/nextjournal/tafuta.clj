@@ -1,6 +1,6 @@
 (ns nextjournal.tafuta
   "A namespace for leveraging unix text search tools like \"ag\" or \"ack\"."
-  (:require [clojure.java.shell :as shell]
+  (:require [babashka.process :as process]
             [clojure.string :as str]
             [jsonista.core :as json]))
 
@@ -16,7 +16,7 @@
     (if (nil? searcher)
       nil
       (if-let [res (try
-                     (let [_out (shell/sh searcher "--version")]
+                     (let [_res @(process/process [searcher "--version"])]
                        searcher)
                      (catch java.io.IOException _e
                        nil))]
@@ -83,12 +83,13 @@
   [pattern dir]
   (let [dir (if (instance? java.io.File dir) (.getPath dir) dir)]
     (if-let [searcher (find-searcher)]
-      (let [{:keys [exit out err]} (apply shell/sh searcher pattern dir (extra-arguments searcher))]
+      (let [{:keys [exit out err]} @(process/process (concat [searcher pattern dir] (extra-arguments searcher)))]
         (case exit
-          0 (case searcher
-              "ag" (->> (str/split out #"\n\n")
-                        (mapcat parse-ackmate))
-              "rg" (parse-rg-jsonlines out))
+          0 (let [out (slurp out)]
+              (case searcher
+                "ag" (->> (str/split out #"\n\n")
+                          (mapcat parse-ackmate))
+                "rg" (parse-rg-jsonlines out)))
           1 nil
           (throw (ex-info (str searcher " exited with error code " exit) {:out out :err err}))))
       (throw (ex-info (str "No supported code search tool found!\n"
