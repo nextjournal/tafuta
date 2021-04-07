@@ -1,9 +1,9 @@
 (ns nextjournal.tafuta
   "A namespace for leveraging unix text search tools like \"ag\" or \"ack\"."
   (:require [babashka.process :as process]
+            [cheshire.core :as json]
             [clojure.java.io :as io]
-            [clojure.string :as str]
-            [jsonista.core :as json]))
+            [clojure.string :as str]))
 
 (def searcher-list '("ag" "rg"))
 (def extra-arguments {"rg" ["--json"]
@@ -63,7 +63,7 @@
   "Reads a string of jsonlines into clojure objects."
   [s]
   (->> (str/split s #"\n")
-       (map #(json/read-value % json/keyword-keys-object-mapper))))
+       (map #(json/parse-string % true))))
 
 (defn parse-rg-jsonlines
   "Parses jsonlines as returned by `rg` and massages them into the clojure data."
@@ -124,7 +124,7 @@
   [s]
   (try
     (re-pattern s)
-    (catch java.util.regex.PatternSyntaxException _e
+    (catch clojure.lang.ExceptionInfo _e
       s)))
 
 (defn git-dir?
