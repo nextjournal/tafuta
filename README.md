@@ -2,9 +2,17 @@
 
 * Tafuta - _Search_ in Swahili
 
-A small clojure library for searching code. It shells out to [ag](https://github.com/ggreer/the_silver_searcher)
-or [ripgrep](https://github.com/BurntSushi/ripgrep) and leverages the speed of those tools.
-The results are returned as Clojure data. An example:
+A small clojure library for searching code, files and directories inside
+a git repository. For the the pattern search of files the library shells out to
+[ag](https://github.com/ggreer/the_silver_searcher) or
+[ripgrep](https://github.com/BurntSushi/ripgrep) and leverages the speed of those tools.
+The results are returned as Clojure data.
+
+The API essentially exposes three functions. In the following `directory` should always be the root of
+some git repository.
+
+`(search pattern directory)` - where `pattern` is some pattern you want to look for across tracked
+git files.
 
 ```clj
 (require '[nextjournal.tafuta :as tafuta])
@@ -28,6 +36,26 @@ The results are returned as Clojure data. An example:
      :line "(tafuta/search \"foo\" \".\")",
      :file "README.md"})
 ```
+
+`(search-file pattern directory)` - where `pattern` matches the files one is interested in. A `*` is
+interpreted as a wildcard. `pattern` gets converted to a regex when possible.
+
+```clj
+(search-file "*clj")
+=> ({:path "src/nextjournal/tafuta.clj"}
+    {:path "test/nextjournal/tafuta_tests.clj"})
+```
+
+`(search-directory pattern directory)` - where `pattern` matches the directories one is interested in. A `*` is
+interpreted as a wildcard. `pattern` gets converted to a regex when possible.
+
+```clj
+(search-directory "nextjournal")
+=> ({:path "src/nextjournal"} {:path "test/nextjournal"})
+
+```
+
+## Requirements
 
 For the library to work you need to have one of [ag](https://github.com/ggreer/the_silver_searcher) or
 [ripgrep](https://github.com/BurntSushi/ripgrep) installed.
