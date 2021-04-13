@@ -1,5 +1,6 @@
 (ns nextjournal.tafuta.fuzzy
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clojure.math.combinatorics :as combo]))
 
 (defn highlight
   "Given a string and a list of indices to highlight. Returns
@@ -114,16 +115,11 @@
     (if-let [results (->> (for [i (range (inc hlen))]
                             [i (aget mat i nlen)])
                           (filter #(not= -1 (second %1)))
-                          (map (fn [[i value]]))
                           seq)]
       (let [[j score] (reduce #(if (< (second %1) (second %2)) %1 %2) results)]
         {:score score
          :highlights (highlights2 mat j needle* haystack*)})
       nil)))
-
-(def char-panelty Double/MIN_VALUE)
-(def word-panelty Double/MIN_VALUE)
-
 
 (comment
   (fuzzy-score2 "foo" "bar")
@@ -142,5 +138,39 @@
   (fuzzy-score2 "clj data" "the clojure data")
   (fuzzy-score2 "agda" "Agda Environment")
   (fuzzy-score2 "agda" "foo Agda Environment")
+  )
+
+(def char-panelty (* Double/MIN_VALUE 2))
+(def word-panelty Double/MIN_VALUE)
+
+(defn fuzzy-match [needle haystack]
+  (let [needles (str/split needle #" ")
+        haystacks (str/split haystack #" ")
+        {:keys [score] :as res} (fuzzy-score2 needle haystack)]
+    (if (>= (count haystacks) (count needles))
+      (let [haystack-combos (combo/combinations haystacks (count needles))
+            haystack-combos-score (map (fn [haystacks]
+                                         (->> (map (fn [needle haystack] (fuzzy-score2 needle haystack)) needles haystacks)
+                                              (reduce (fn [res {:keys [score]}] (+ res score)) 0)))
+                                       haystack-combos)]
+        haystack-combos-score)
+      res)))
+
+(comment
   (fuzzy-score2 "foo" "bar")
+  (fuzzy-score2 "clj" "clojure")
+  (fuzzy-score2 "clj" "cool jerseys")
+  (fuzzy-score2 "clj" "cool left jerseys")
+  (highlight "cool jerseys" (:highlights (fuzzy-score2 "clj" "cool jerseys")))
+  (fuzzy-score2 "clj" "aclojure")
+  (fuzzy-score2 "clj" "a clojure")
+  (fuzzy-score2 "data" "Data objects")
+  (fuzzy-match "data" "the Data objects")
+  (fuzzy-score2 "clj data" "clj data")
+  (fuzzy-score2 "clj data" "clojure data")
+  (fuzzy-score2 "clj data" "cljodata")
+  (fuzzy-score2 "clj data" "clojure the data")
+  (fuzzy-score2 "clj data" "the clojure data")
+  (fuzzy-score2 "agda" "Agda Environment")
+  (fuzzy-score2 "agda" "foo Agda Environment")
   )
