@@ -123,12 +123,3 @@
              {:path "test/nextjournal/tafuta_tests.clj"})
            (tafuta/search-file "tafuta*clj"))
         "search-file with wildcard not working")))
-
-(deftest search-directory-test
-  (testing "search-directory"
-    (is (= '({:path "src/nextjournal"} {:path "test/nextjournal"})
-           (tafuta/search-directory "nextjournal"))
-        "search-directory in current directory not working")
-    (is (= '({:path "src/nextjournal"} {:path "test/nextjournal"})
-           (tafuta/search-directory "*journal"))
-        "search-with wildcard not working")))

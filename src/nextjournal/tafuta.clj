@@ -118,15 +118,6 @@
      (not duplicates?)
      (remove-duplicate :file))))
 
-(defn try-convert-to-regex
-  "Tries to convert a string to a regex, returns the string if not a valid
-  Java regex."
-  [s]
-  (try
-    (re-pattern s)
-    (catch clojure.lang.ExceptionInfo _e
-      s)))
-
 (defn git-dir?
   "Returns true if the given directory is the root of a git directory."
   [dir]
@@ -154,80 +145,45 @@
   (git-files (io/file "/"))
   )
 
-(def non-escaped-stars-regex #"(?<!\\)\*")
+(defn create-fuzzy-regex [s]
+  (let [s (str/replace s " " "")]
+    (->> (interleave (seq s) (repeat (count s) ".*"))
+         (apply str)
+         re-pattern)))
 
-(defn replace-non-escaped-stars
-  "Replaces non escaped stars with \".*\"."
-  [pat]
-  (str/replace pat non-escaped-stars-regex ".*"))
-
-(comment
-  (replace-non-escaped-stars "\\*123")
-  (replace-non-escaped-stars "\\*123*")
-  )
+(def char-penalty Double/MIN_VALUE)
+(def name-match-score 10.0)
+(def path-match-score 100.0)
 
 (defn search-file
   "Recursively searches for files matching pattern in a given directory.
   The default directory is the path from which the JVM was invoked.
-  Returns the relative paths with respect to the given directory as data.
-  A non escaped star is interpreted as a wildcard character."
+  Returns the relative paths with respect to the given directory as data."
   ([pattern] (search-file pattern (io/file ".")))
   ([pattern dir]
    (let [files (git-files dir)
-         regex (-> pattern replace-non-escaped-stars try-convert-to-regex)
-         results (cond
-                   (empty? pattern)
-                   files
-
-                   (= (type regex) java.lang.String)
-                   (filter #(str/includes? (.getName %) pattern) files)
-
-                   :else
-                   (filter #(re-matches regex (.getName %)) files))]
-     (map (fn [file] {:path (str file)}) results))))
-
-(comment
-  (search-file "*clj")
-  (search-file "taf*.clj")
-  )
-
-(defn git-dirs
-  "Return all directories currently under source control of given git root directory."
-  [dir]
-  {:pre [(git-dir? dir)]}
-  (let [{:keys [exit out err]} @(process/process ["git" "ls-tree" "-d" "-r" "HEAD" "--name-only"] {:dir dir})]
-    (case exit
-      0 (->> (slurp out)
-             (str/split-lines)
-             (map #(io/file %)))
-      (throw (ex-info (str "git ls-files exited with error code " exit) {:out out :err err})))))
+         regex (create-fuzzy-regex pattern)]
+     (->>
+      (map (fn [file]
+             (let [name-match (re-find regex (.getName file))
+                   path-match (re-find regex (.getPath file))]
+               (cond name-match
+                     {:path (str file)
+                      :score (+ name-match-score
+                                (* (- (count name-match)
+                                      (count pattern))
+                                   char-penalty))}
+                     path-match
+                     {:path (str file)
+                      :score (+ path-match-score
+                                (* (- (count name-match)
+                                      (count pattern))
+                                   char-penalty))}))) files)
+      (remove nil?)
+      (sort #(compare (:score %1) (:score %2)))
+      (map #(dissoc %1 :score))))))
 
 (comment
-  (git-dirs (io/file "."))
-  (git-dirs (io/file "/"))
-  )
-
-(defn search-directory
-  "Recursively searches for directories matching pattern in a given directory.
-  The default directory is the path from which the JVM was invoked.
-  Returns the relative paths with respect to the given directory as data.
-  A non escaped star is interpreted as a wildcard character."
-  ([pattern] (search-directory pattern (io/file ".")))
-  ([pattern dir]
-   (let [dirs (git-dirs dir)
-         regex (-> pattern replace-non-escaped-stars try-convert-to-regex)
-         results (cond
-                   (empty? pattern)
-                   dirs
-
-                   (= (type regex) java.lang.String)
-                   (filter #(str/includes? (.getName %) pattern) dirs)
-
-                   :else
-                   (filter #(re-matches regex (.getName %)) dirs))]
-     (map (fn [file] {:path (str file)}) results))))
-
-(comment
-  (search-directory "nextjournal")
-  (search-directory "*editor*")
+  (search-file "clj")
+  (search-file "l")
   )

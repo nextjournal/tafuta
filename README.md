@@ -8,7 +8,7 @@ a git repository. For the the pattern search of files the library shells out to
 [ripgrep](https://github.com/BurntSushi/ripgrep) and leverages the speed of those tools.
 The results are returned as Clojure data.
 
-The API essentially exposes three functions. In the following `directory` should always be the root of
+The API exposes two functions. In the following `directory` should always be the root of
 some git repository.
 
 `(search pattern directory)` - where `pattern` is some pattern you want to look for across tracked
@@ -37,22 +37,12 @@ git files.
      :file "README.md"})
 ```
 
-`(search-file pattern directory)` - where `pattern` matches the files one is interested in. A `*` is
-interpreted as a wildcard. `pattern` gets converted to a regex when possible.
+`(search-file pattern directory)` - where `pattern` matches the files one is interested in fuzzily.
 
 ```clj
-(search-file "*clj")
+(search-file "clj")
 => ({:path "src/nextjournal/tafuta.clj"}
     {:path "test/nextjournal/tafuta_tests.clj"})
-```
-
-`(search-directory pattern directory)` - where `pattern` matches the directories one is interested in. A `*` is
-interpreted as a wildcard. `pattern` gets converted to a regex when possible.
-
-```clj
-(search-directory "nextjournal")
-=> ({:path "src/nextjournal"} {:path "test/nextjournal"})
-
 ```
 
 ## Requirements
