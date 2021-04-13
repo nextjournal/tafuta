@@ -54,14 +54,15 @@
                     (min (inc (aget mat (dec i) j))
                          (inc (aget mat i (dec j)))
                          (+ (aget mat (dec i) (dec j))
-                            (bool->int (= (nth needle* (dec i))
-                                          (nth haystack* (dec j))))))))))
+                            (if (= (nth needle* (dec i))
+                                   (nth haystack* (dec j)))
+                              0 2)))))))
     (let [[j score] (->> (for [j (range (inc hlen))]
                            [j (aget mat nlen j)])
                          (reduce #(if (< (second %1) (second %2)) %1 %2)))]
 
       {:score score
-       :highlights (->> (highlights mat j needle* haystack*))})))
+       :highlights (highlights mat j needle* haystack*)})))
 
 (comment
   (fuzzy-score "clj" "clojure")
@@ -73,5 +74,73 @@
   (fuzzy-score "agda" "Agda Environment")
   (fuzzy-score "agda" "foo Agda Environment")
   (fuzzy-score "foo" "bar")
+  )
 
+
+(defn highlights2 [mat start needle _haystack]
+  (loop [highlighted [] i start j (count needle)]
+    (cond (or (= i 0) (= j 0))
+          (vec (reverse highlighted))
+          (and (not= -1 (aget mat (dec i) j)) (= (dec (aget mat i j)) (aget mat (dec i) j)))
+          (recur highlighted (dec i) j)
+          :else
+          (recur (conj highlighted (dec i)) (dec i) (dec j)))))
+
+
+(defn fuzzy-score2 [needle haystack]
+  (let [nlen (count needle)
+        hlen (count haystack)
+        mat (make-array Long/TYPE (inc hlen) (inc nlen))
+        needle* (str/lower-case needle)
+        haystack* (str/lower-case haystack)]
+    (doseq [j (range (inc nlen))]
+      (doseq [i (range (inc hlen))]
+        (cond (and (= i 0) (= j 0)) (aset mat i j 0)
+              (< i j) (aset mat i j -1)
+              (= j 0) (aset mat i j i)
+              :else
+              (aset mat i j
+                    (let [tmp (aget mat (dec i) j)
+                          res (if (= tmp -1) -1 (inc tmp))
+                          tmp (aget mat (dec i) (dec j))
+                          res (if (and (= (nth needle* (dec j))
+                                          (nth haystack* (dec i)))
+                                       (not= tmp -1))
+                                (if (not= res -1)
+                                  (min res tmp)
+                                  tmp)
+                                res)]
+                      res)))))
+    (if-let [results (->> (for [i (range (inc hlen))]
+                            [i (aget mat i nlen)])
+                          (filter #(not= -1 (second %1)))
+                          (map (fn [[i value]]))
+                          seq)]
+      (let [[j score] (reduce #(if (< (second %1) (second %2)) %1 %2) results)]
+        {:score score
+         :highlights (highlights2 mat j needle* haystack*)})
+      nil)))
+
+(def char-panelty Double/MIN_VALUE)
+(def word-panelty Double/MIN_VALUE)
+
+
+(comment
+  (fuzzy-score2 "foo" "bar")
+  (fuzzy-score2 "clj" "clojure")
+  (fuzzy-score2 "clj" "cool jerseys")
+  (fuzzy-score2 "clj" "cool left jerseys")
+  (highlight "cool jerseys" (:highlights (fuzzy-score2 "clj" "cool jerseys")))
+  (fuzzy-score2 "clj" "aclojure")
+  (fuzzy-score2 "clj" "a clojure")
+  (fuzzy-score2 "data" "Data objects")
+  (fuzzy-score2 "data" "the Data objects")
+  (fuzzy-score2 "clj data" "clj data")
+  (fuzzy-score2 "clj data" "clojure data")
+  (fuzzy-score2 "clj data" "cljodata")
+  (fuzzy-score2 "clj data" "clojure the data")
+  (fuzzy-score2 "clj data" "the clojure data")
+  (fuzzy-score2 "agda" "Agda Environment")
+  (fuzzy-score2 "agda" "foo Agda Environment")
+  (fuzzy-score2 "foo" "bar")
   )
