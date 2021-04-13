@@ -151,7 +151,7 @@
          (apply str)
          re-pattern)))
 
-(def char-penalty Double/MIN_VALUE)
+(def char-penalty 1.0E-12)
 (def name-match-score 10.0)
 (def path-match-score 100.0)
 
@@ -185,5 +185,6 @@
 
 (comment
   (search-file "clj")
+  (search-file "tafuta.clj")
   (search-file "l")
   )
