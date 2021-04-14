@@ -146,52 +146,69 @@
   (git-files (io/file "/"))
   )
 
-(defn create-fuzzy-regex [s]
-  (let [s (str/replace s " " "")]
-    (->> (interleave (seq s) (repeat (count s) ".*?"))
-         (apply str)
-         re-pattern)))
+(def name-match-score 100.0)
+(def path-match-score 10.0)
+(def order-score 5.0)
+(def char-penalty 1E-10)
 
-(def char-penalty 1.0E-12)
-(def name-match-score 10.0)
-(def path-match-score 100.0)
+(defn score-file [file terms]
+  {:pre [(instance? java.io.File file)]}
+  (let [name (.getName file)
+        path (.getPath file)
+        dir-path-length (- (count path) (count name))
+        name-matches (map #(str/index-of name %1) terms)
+        path-matches (map #(str/index-of path %1) terms)
+        matches+scores (map #(cond %1 {:score (- name-match-score (* %1 char-penalty))
+                                       :index (+ %1 dir-path-length)}
+                                   %2 {:score path-match-score
+                                       :index %2})
+                            name-matches path-matches)
+        score (->> (concat
+                    (map (fn [match1 match2]
+                           (when (and match1 match2)
+                             (update match1 :score
+                                     (if (< (:index match1) (:index match2)) + -)
+                                     order-score)))
+                         matches+scores (rest matches+scores))
+                    (list (last matches+scores)))
+                   (remove nil?)
+                   (reduce (fn [score match] (+ score (:score match))) 0))]
+    {:path (str file)
+     :score score}))
+
+(comment
+  (score-file (io/file "/foo/path/to/a/long/bar.clj") ["foo" "bar"])
+  (score-file (io/file "bar/path/foo.clj") ["foo" "bar"])
+  (score-file (io/file "/path/barfoo.clj") ["foo" "bar"])
+  (score-file (io/file "/path/barfoo.clj") ["foo"])
+  (score-file (io/file "bar/path/foo.clj") ["foo" "foo"])
+  (score-file (io/file "foo/bar.clj") ["foo"])
+  (score-file (io/file "foo/bar.clj") ["toto"])
+  (score-file (io/file "foo/bar.clj") ["toto" "titi"])
+
+  )
 
 (defn search-file
   "Recursively searches for files matching pattern in a given directory.
   The default directory is the path from which the JVM was invoked.
   Returns the relative paths with respect to the given directory as data."
   ([pattern] (search-file pattern (io/file ".")))
-  ([pattern dir]
-   (let [files (git-files dir)
-         regex (create-fuzzy-regex pattern)]
-     (->>
-      (map (fn [file]
-             (let [name-match (re-find regex (.getName file))
-                   path-match (re-find regex (.getPath file))]
-               (cond name-match
-                     {:path (str file)
-                      :score (+ name-match-score
-                                (* (- (count name-match)
-                                      (count pattern))
-                                   char-penalty))}
-                     path-match
-                     {:path (str file)
-                      :score (+ path-match-score
-                                (* (- (count path-match)
-                                      (count pattern))
-                                   char-penalty))}))) files)
-      (remove nil?)
-      (sort #(compare (:score %1) (:score %2)))
-      (map #(dissoc %1 :score))))))
+  ([pattern dir] (search-file pattern dir (git-files dir)))
+  ([pattern _dir files]
+   (let [pattern-terms (str/split pattern #" ")]
+     (->> (map #(score-file %1 pattern-terms) files)
+          (remove #(= 0 (:score %1)))
+          (sort #(compare (:score %2) (:score %1)))
+          (map #(dissoc %1 :score))))))
 
 (comment
   (search "tafuta")
   (search-file "tafuta clj")
 
   (search-file "manager" (io/file "/home/fv/Code/Clojure/nextjournal/"))
-
-  (search-file "manager" (io/file "/home/fv/Code/Clojure/nextjournal/"))
   (search-file "h man" (io/file "/home/fv/Code/Clojure/nextjournal/"))
+  (search-file "prepl" (io/file "/home/fv/Code/Clojure/nextjournal/"))
+  (search-file "schedule" (io/file "/home/fv/Code/Clojure/nextjournal/"))
+  (search-file "runner" (io/file "/home/fv/Code/Clojure/nextjournal/"))
 
-  (search-file "l")
   )
