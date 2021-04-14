@@ -101,13 +101,14 @@
   ([pattern dir]
    (let [dir (if (instance? java.io.File dir) (.getPath dir) dir)]
      (if-let [searcher (find-searcher)]
-       (let [{:keys [exit out err]} @(process/process (concat [searcher pattern dir] (extra-arguments searcher)))]
+       (let [{:keys [exit out err]} @(process/process (concat [searcher pattern dir] (extra-arguments searcher))
+                                                      {:out :string})]
          (case exit
-           0 (let [out (slurp out)]
-               (case searcher
-                 "ag" (->> (str/split out #"\n\n")
-                           (mapcat parse-ackmate))
-                 "rg" (parse-rg-jsonlines out)))
+           0
+           (case searcher
+             "ag" (->> (str/split out #"\n\n")
+                       (mapcat parse-ackmate))
+             "rg" (parse-rg-jsonlines out))
            1 nil
            (throw (ex-info (str searcher " exited with error code " exit) {:out out :err err}))))
        (throw (ex-info (str "No supported code search tool found!\n"
@@ -133,9 +134,9 @@
   "Return all files currently under source control of given git root directory."
   [dir]
   {:pre [(git-dir? dir)]}
-  (let [{:keys [exit out err]} @(process/process ["git" "ls-files"] {:dir dir})]
+  (let [{:keys [exit out err]} @(process/process ["git" "ls-files"] {:dir dir :out :string})]
     (case exit
-      0 (->> (slurp out)
+      0 (->> out
              (str/split-lines)
              (map #(io/file %)))
       (throw (ex-info (str "git ls-files exited with error code " exit) {:out out :err err})))))
@@ -147,7 +148,7 @@
 
 (defn create-fuzzy-regex [s]
   (let [s (str/replace s " " "")]
-    (->> (interleave (seq s) (repeat (count s) ".*"))
+    (->> (interleave (seq s) (repeat (count s) ".*?"))
          (apply str)
          re-pattern)))
 
@@ -176,7 +177,7 @@
                      path-match
                      {:path (str file)
                       :score (+ path-match-score
-                                (* (- (count name-match)
+                                (* (- (count path-match)
                                       (count pattern))
                                    char-penalty))}))) files)
       (remove nil?)
@@ -184,7 +185,13 @@
       (map #(dissoc %1 :score))))))
 
 (comment
-  (search-file "clj")
-  (search-file "tafuta.clj")
+  (search "tafuta")
+  (search-file "tafuta clj")
+
+  (search-file "manager" (io/file "/home/fv/Code/Clojure/nextjournal/"))
+
+  (search-file "manager" (io/file "/home/fv/Code/Clojure/nextjournal/"))
+  (search-file "h man" (io/file "/home/fv/Code/Clojure/nextjournal/"))
+
   (search-file "l")
   )
