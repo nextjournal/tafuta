@@ -147,6 +147,7 @@
   (git-files (io/file "/"))
   )
 
+(def start-boost 100.0)
 (def name-match-score 100.0)
 (def path-match-score 10.0)
 (def order-score 5.0)
@@ -163,18 +164,24 @@
   (file-splitter-fn (io/file "bar/path/foo.clj"))
   )
 
+(defn score-pattern [pattern candidate score]
+  (when-let [index (str/index-of candidate pattern)]
+    (cond-> (- score (* index char-penalty))
+      (= 0 index) (+ start-boost))))
+
 (defn score-file-fn [pattern-terms file-terms]
   (let [name (last file-terms)
         path-segments (butlast file-terms)
         name-matches (map (fn [pattern-term]
-                            (if-let [index (str/index-of name pattern-term)]
-                              {:score (- name-match-score (* index char-penalty))
+                            (when-let [score (score-pattern pattern-term name name-match-score)]
+                              {:score score
                                :index (dec (count path-segments))}))
                           pattern-terms)
         path-segment-matches (map (fn [pattern-term]
-                                    (->> (map-indexed (fn [i segment] (if-let [index (str/index-of segment pattern-term)]
-                                                                        {:score (- path-match-score (* index char-penalty))
-                                                                         :index i}))
+                                    (->> (map-indexed (fn [i segment]
+                                                        (when-let [score (score-pattern pattern-term segment path-match-score)]
+                                                          {:score score
+                                                           :index i}))
                                                       path-segments)
                                          (some #(when (not= nil %1) %1))))
                                   pattern-terms)
