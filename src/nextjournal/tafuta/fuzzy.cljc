@@ -36,7 +36,8 @@
 
 (def match-score 100.0)
 (def order-score 10.0)
-(def char-panelity 2.0)
+(def char-penalty 1.0)
+(def candidate-term-penalty 2.0)
 
 (defn basic-score-fn [pattern-terms candidate-terms]
   (let [candidates (map-indexed (fn [index candidate] {:candidate candidate :index index}) candidate-terms)
@@ -44,21 +45,22 @@
                                                (map (fn [{:keys [candidate index] :as res}]
                                                       (if-let [s (basic-term-score pattern candidate 2)]
                                                         (assoc res :score (-  (- match-score index)
-                                                                              (* s char-panelity))))))
+                                                                              (* s char-penalty))))))
                                                (some #(when % %))))
                             pattern-terms)]
     (if (some nil? pattern-scores)
       nil
-      (->> (concat
-            (map (fn [match1 match2]
-                   (when (and match1 match2)
-                     (update match1 :score
-                             (if (< (:index match1) (:index match2)) + -)
-                             order-score)))
-                 pattern-scores (rest pattern-scores))
-            (list (last pattern-scores)))
-           (remove nil?)
-           (reduce (fn [score match] (+ score (:score match))) 0)))))
+      (let [score (->> (concat
+                        (map (fn [match1 match2]
+                               (when (and match1 match2)
+                                 (update match1 :score
+                                         (if (< (:index match1) (:index match2)) + -)
+                                         order-score)))
+                             pattern-scores (rest pattern-scores))
+                        (list (last pattern-scores)))
+                       (remove nil?)
+                       (reduce (fn [score match] (+ score (:score match))) 0))]
+        (- score (* (max 0 (- (count candidate-terms) (count pattern-terms))) candidate-term-penalty))))))
 
 (comment
   (basic-score-fn ["hello" "clj"] ["hello" "clojure"])
@@ -75,6 +77,7 @@
   (score basic-scorer "hello clojure" "hello clojure")
   (score basic-scorer "hello clojure" "hello world clojure")
   (score basic-scorer "hello world clojure" "hello clojure")
+  (score basic-scorer "hello clojure what" "hello clojure")
   (score basic-scorer "hello" "hello")
   (score basic-scorer "hello" "hello clojure")
 
