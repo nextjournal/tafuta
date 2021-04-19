@@ -3,7 +3,8 @@
   (:require [babashka.process :as process]
             [cheshire.core :as json]
             [clojure.java.io :as io]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [nextjournal.tafuta.fuzzy :as fuzzy]))
 
 (def searcher-list '("ag" "rg"))
 (def extra-arguments {"rg" ["--json"]
@@ -151,18 +152,33 @@
 (def order-score 5.0)
 (def char-penalty 1E-10)
 
-(defn score-file [file terms]
+(defn file-splitter-fn [file]
   {:pre [(instance? java.io.File file)]}
-  (let [name (.getName file)
-        path (.getPath file)
-        dir-path-length (- (count path) (count name))
-        name-matches (map #(str/index-of name %1) terms)
-        path-matches (map #(str/index-of path %1) terms)
-        matches+scores (map #(cond %1 {:score (- name-match-score (* %1 char-penalty))
-                                       :index (+ %1 dir-path-length)}
-                                   %2 {:score path-match-score
-                                       :index %2})
-                            name-matches path-matches)
+  (->> (str/split (.getPath file) #"/")
+       (remove empty?)
+       vec))
+
+(comment
+  (file-splitter-fn (io/file "/foo/path/to/a/long/bar.clj"))
+  (file-splitter-fn (io/file "bar/path/foo.clj"))
+  )
+
+(defn score-file-fn [pattern-terms file-terms]
+  (let [name (last file-terms)
+        path-segments (butlast file-terms)
+        name-matches (map (fn [pattern-term]
+                            (if-let [index (str/index-of name pattern-term)]
+                              {:score (- name-match-score (* index char-penalty))
+                               :index (dec (count path-segments))}))
+                          pattern-terms)
+        path-segment-matches (map (fn [pattern-term]
+                                    (->> (map-indexed (fn [i segment] (if-let [index (str/index-of segment pattern-term)]
+                                                                        {:score (- path-match-score (* index char-penalty))
+                                                                         :index i}))
+                                                      path-segments)
+                                         (some #(when (not= nil %1) %1))))
+                                  pattern-terms)
+        matches+scores (map #(or %1 %2) name-matches path-segment-matches)
         score (->> (concat
                     (map (fn [match1 match2]
                            (when (and match1 match2)
@@ -173,18 +189,26 @@
                     (list (last matches+scores)))
                    (remove nil?)
                    (reduce (fn [score match] (+ score (:score match))) 0))]
-    {:path (str file)
-     :score score}))
+    score))
+
+(def fuzzy-scorer (fuzzy/create-fuzzy-scorer fuzzy/standard-pattern-splitter file-splitter-fn score-file-fn))
+
+(defn score-file [file pattern]
+  {:pre [(instance? java.io.File file)]}
+  {:path (str file)
+   :score (fuzzy/score fuzzy-scorer pattern file)})
 
 (comment
-  (score-file (io/file "/foo/path/to/a/long/bar.clj") ["foo" "bar"])
-  (score-file (io/file "bar/path/foo.clj") ["foo" "bar"])
-  (score-file (io/file "/path/barfoo.clj") ["foo" "bar"])
-  (score-file (io/file "/path/barfoo.clj") ["foo"])
-  (score-file (io/file "bar/path/foo.clj") ["foo" "foo"])
-  (score-file (io/file "foo/bar.clj") ["foo"])
-  (score-file (io/file "foo/bar.clj") ["toto"])
-  (score-file (io/file "foo/bar.clj") ["toto" "titi"])
+  (score-file (io/file "/foo/path/to/a/long/bar.clj") "foo bar" )
+  (score-file (io/file "bar/path/foo.clj") "foo bar")
+  (score-file (io/file "/path/barfoo.clj") "foo bar" )
+  (score-file (io/file "/path/barfoo.clj") "foo")
+  (score-file (io/file "bar/path/foo.clj") "foo foo")
+  (score-file (io/file "foo/bar.clj") "foo")
+  (score-file (io/file "foo/bar.clj") "toto")
+  (score-file (io/file "foo/bar.clj") "toto titi")
+
+  (score-file (io/file "src/nextjournal/tafuta/fuzzy.cljc") "tafuta clj")
 
   )
 
@@ -195,11 +219,10 @@
   ([pattern] (search-file pattern (io/file ".")))
   ([pattern dir] (search-file pattern dir (git-files dir)))
   ([pattern _dir files]
-   (let [pattern-terms (str/split pattern #" ")]
-     (->> (map #(score-file %1 pattern-terms) files)
-          (remove #(= 0 (:score %1)))
-          (sort #(compare (:score %2) (:score %1)))
-          (map #(dissoc %1 :score))))))
+   (->> (map #(score-file %1 pattern) files)
+        (remove #(= 0 (:score %1)))
+        (sort #(compare (:score %2) (:score %1)))
+        (map #(dissoc %1 :score)))))
 
 (comment
   (search "tafuta")
