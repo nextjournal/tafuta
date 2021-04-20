@@ -1,5 +1,7 @@
 # Tafuta
 
+**This is pre-alpha quality. Don't use it.**
+
 * Tafuta - _Search_ in Swahili
 
 A small clojure library for searching code, files and directories inside
