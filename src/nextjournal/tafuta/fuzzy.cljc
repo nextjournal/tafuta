@@ -1,7 +1,8 @@
 (ns nextjournal.tafuta.fuzzy
   "The namespace tries to provide a general API to rank fuzzily a list of candidates,
   most likely string related, given some some search pattern"
-  (:require [clojure.string :as str]))
+  (:require [clojure.set :as set]
+            [clojure.string :as str]))
 
 (defn standard-pattern-splitter [s]
   (-> s str/lower-case (str/split #" ")))
@@ -40,7 +41,6 @@
 (def order-score 10.0)
 (def char-penalty 1.0)
 (def candidate-term-penalty 2.0)
-(def position-penalty 10.0)
 (def allowed-misses 2)
 
 (defn calc-indexes [candidate-terms]
@@ -68,7 +68,9 @@
                                                                (update score-map :score #(-  (- match-score pos-index)
                                                                                              (* %1 char-penalty)))))))
                                                (some #(when % %))))
-                            pattern-terms)]
+                            pattern-terms)
+        non-matched-candidates (seq (set/difference (set (range (count candidate-terms)))
+                                                    (set (map :pos-index pattern-scores))))]
     (if (some nil? pattern-scores)
       nil
       (let [res (->> (concat
@@ -85,7 +87,11 @@
                                 :highlights (concat highlights (:highlights match))})
                              {:score 0
                               :highlights []}))]
-        (update res :score #(- %1 (* (max 0 (- (count candidate-terms) (count pattern-terms))) candidate-term-penalty)))))))
+        (update res :score #(- % (* (->> non-matched-candidates
+                                         (map (fn [index] (-  (count candidate-terms) index)))
+                                         (reduce +))
+                                    candidate-term-penalty)))))))
+
 
 (comment
   (basic-score-fn ["hello" "clj"] ["hello" "clojure"])
@@ -105,8 +111,10 @@
   (score basic-scorer "hello clojure what" "hello clojure")
   (score basic-scorer "hello" "hello")
   (score basic-scorer "hello" "hello clojure")
+  (score basic-scorer "foo bar" "foo the bar")
+  (score basic-scorer "foo bar" "foo the bar man")
+  (score basic-scorer "foo bar" "foo the man bar ")
   (score basic-scorer "foo bar" "the foo bar man")
   (score basic-scorer "foo bar" "the foo man bar ")
-  (score basic-scorer "foo bar" "foo the man bar ")
 
   )
