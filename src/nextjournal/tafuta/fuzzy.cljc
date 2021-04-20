@@ -4,15 +4,16 @@
   (:require [clojure.string :as str]))
 
 (defn standard-pattern-splitter [s]
-  (str/split s #" "))
+  (-> s str/lower-case (str/split #" ")))
 
 (deftype FuzzyScorer [pattern-splitter candidate-splitter score-fn])
 
 (defn create-fuzzy-scorer [pattern-splitter candidate-splitter score-fn]
   (->FuzzyScorer pattern-splitter candidate-splitter score-fn))
 
-(defn score [scorer pattern object]
-  ((.score-fn scorer) ((.pattern-splitter scorer) pattern) ((.candidate-splitter scorer) object)))
+(defn score [scorer pattern candidate]
+  #?(:cljs ((.-score-fn scorer) ((.-pattern-splitter scorer) pattern) ((.-candidate-splitter scorer) candidate))
+     :clj ((.score-fn scorer) ((.pattern-splitter scorer) pattern) ((.candidate-splitter scorer) candidate))))
 
 ;; Code for a basic fuzzy searcher
 
@@ -39,6 +40,7 @@
 (def order-score 10.0)
 (def char-penalty 1.0)
 (def candidate-term-penalty 2.0)
+(def position-penalty 10.0)
 (def allowed-misses 2)
 
 (defn calc-indexes [candidate-terms]
@@ -66,8 +68,7 @@
                                                                (update score-map :score #(-  (- match-score pos-index)
                                                                                              (* %1 char-penalty)))))))
                                                (some #(when % %))))
-                            pattern-terms)
-        ]
+                            pattern-terms)]
     (if (some nil? pattern-scores)
       nil
       (let [res (->> (concat
@@ -84,8 +85,7 @@
                                 :highlights (concat highlights (:highlights match))})
                              {:score 0
                               :highlights []}))]
-        res
-        #_(update res :score #(- %1 (* (max 0 (- (count candidate-terms) (count pattern-terms))) candidate-term-penalty)))))))
+        (update res :score #(- %1 (* (max 0 (- (count candidate-terms) (count pattern-terms))) candidate-term-penalty)))))))
 
 (comment
   (basic-score-fn ["hello" "clj"] ["hello" "clojure"])
@@ -98,12 +98,15 @@
 (def basic-scorer (create-fuzzy-scorer standard-pattern-splitter standard-pattern-splitter basic-score-fn))
 
 (comment
-  (score basic-scorer "hello clj" "hello clojure")
+  (score basic-scorer "hello clj" "hello Clojure")
   (score basic-scorer "hello clojure" "hello clojure")
   (score basic-scorer "hello clojure" "hello world clojure")
   (score basic-scorer "hello world clojure" "hello clojure")
   (score basic-scorer "hello clojure what" "hello clojure")
   (score basic-scorer "hello" "hello")
   (score basic-scorer "hello" "hello clojure")
+  (score basic-scorer "foo bar" "the foo bar man")
+  (score basic-scorer "foo bar" "the foo man bar ")
+  (score basic-scorer "foo bar" "foo the man bar ")
 
   )
