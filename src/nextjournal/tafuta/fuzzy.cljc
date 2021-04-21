@@ -21,18 +21,19 @@
 (defn basic-term-score
   ([pattern candidate] (basic-term-score pattern candidate {:cut-off (count candidate) :start-index 0}))
   ([pattern candidate {:keys [cut-off start-index] :or {cut-off 0 start-index 0}}]
-   (if (< (count candidate) (count pattern))
-     nil
-     (loop [pa (seq pattern) ca (seq candidate) i start-index score 0 highlights []]
-       (cond (> score cut-off) nil
-             (empty? pa) {:score score :highlights highlights}
-             (= (first pa) (first ca)) (recur (rest pa) (rest ca) (inc i) score (conj highlights i))
-             :else (recur pa (rest ca) (inc i) (inc score) highlights))))))
+   (let [i (str/index-of candidate pattern)]
+     (cond (< (count candidate) (count pattern)) nil
+           i {:score (if (= 0 i) 0 1) :highlights [[(+ i start-index) (+ i start-index (count pattern))]]}
+           :else (loop [pa (seq pattern) ca (seq candidate) i start-index score 0 highlights []]
+                   (cond (> score cut-off) nil
+                         (empty? pa) {:score (inc score) :highlights highlights}
+                         (= (first pa) (first ca)) (recur (rest pa) (rest ca) (inc i) score (conj highlights i))
+                         :else (recur pa (rest ca) (inc i) (inc score) highlights)))))))
 
 (comment
   (basic-term-score "clj" "clojure")
   (basic-term-score "clj" "clojure" {:cut-off 2})
-  (basic-term-score "aclj" "clojure")
+  (basic-term-score "aclj" "clojure" {:cut-off 2})
   (basic-term-score "cloj" "clojure")
   (basic-term-score "cloj" "clojure" {:start-index 2})
   )
@@ -106,6 +107,9 @@
 (comment
   (score basic-scorer "h" "aha")
   (score basic-scorer "h" "haskell two")
+  (score basic-scorer "hello clj" "hello Clojure")
+  (score basic-scorer "clj" "rewrite-clj")
+  (score basic-scorer "clj" "clojure")
   (score basic-scorer "hello clj" "hello Clojure")
   (score basic-scorer "hello clojure" "hello clojure")
   (score basic-scorer "hello clojure" "hello world clojure")
