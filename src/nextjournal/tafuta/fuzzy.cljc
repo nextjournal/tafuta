@@ -18,6 +18,8 @@
 
 ;; Code for a basic fuzzy searcher
 
+(def highlight-comp #(< (if (seqable? %1) (first %1) %1) (if (seqable? %2) (first %2) %2)))
+
 (defn basic-term-score
   ([pattern candidate] (basic-term-score pattern candidate {:cut-off (count candidate) :start-index 0}))
   ([pattern candidate {:keys [cut-off start-index] :or {cut-off 0 start-index 0}}]
@@ -29,19 +31,18 @@
                          (empty? pa) {:score (inc score) :highlights highlights}
                          (= (first pa) (first ca)) (recur (rest pa) (rest ca) (inc i) score (conj highlights i))
                          :else (recur pa (rest ca) (inc i) (inc score) highlights)))))))
-
 (comment
   (basic-term-score "clj" "clojure")
   (basic-term-score "clj" "clojure" {:cut-off 2})
-  (basic-term-score "aclj" "clojure" {:cut-off 2})
+  (basic-term-score "aclj" "clojure")
   (basic-term-score "cloj" "clojure")
   (basic-term-score "cloj" "clojure" {:start-index 2})
   )
 
-(def match-score 100.0)
-(def order-score 10.0)
-(def char-penalty 5.0)
-(def candidate-term-penalty 2.0)
+(def match-score 1000.0)
+(def order-score 100.0)
+(def char-penalty 10.0)
+(def candidate-term-penalty 1.0)
 (def allowed-misses 2)
 
 (defn calc-indexes [candidate-terms]
@@ -88,10 +89,12 @@
                                 :highlights (concat highlights (:highlights match))})
                              {:score 0
                               :highlights []}))]
-        (update res :score #(- % (* (->> non-matched-candidates
+        (-> res
+            (update :score #(- % (* (->> non-matched-candidates
                                          (map (fn [index] (-  (count candidate-terms) index)))
                                          (reduce +))
-                                    candidate-term-penalty)))))))
+                                    candidate-term-penalty)))
+            (update :highlights #(sort highlight-comp %)))))))
 
 
 (comment
@@ -107,20 +110,15 @@
 (comment
   (score basic-scorer "h" "aha")
   (score basic-scorer "h" "haskell two")
+  (score basic-scorer "hello clj" "hello clj")
   (score basic-scorer "hello clj" "hello Clojure")
-  (score basic-scorer "clj" "rewrite-clj")
-  (score basic-scorer "clj" "clojure")
-  (score basic-scorer "hello clj" "hello Clojure")
-  (score basic-scorer "hello clojure" "hello clojure")
-  (score basic-scorer "hello clojure" "hello world clojure")
-  (score basic-scorer "hello world clojure" "hello clojure")
-  (score basic-scorer "hello clojure what" "hello clojure")
-  (score basic-scorer "hello" "hello")
-  (score basic-scorer "hello" "hello clojure")
-  (score basic-scorer "foo bar" "foo the bar")
-  (score basic-scorer "foo bar" "foo the bar man")
-  (score basic-scorer "foo bar" "foo the man bar ")
-  (score basic-scorer "foo bar" "the foo bar man")
-  (score basic-scorer "foo bar" "the foo man bar ")
+  (score basic-scorer "clj" "clj")
+  (score basic-scorer "clj" "clj-kondo")
+  (score basic-scorer "clj" "clj clj")
+  (score basic-scorer "clj" "clj-kondo bar foo foo foo")
+  (score basic-scorer "clj" "foo clj-kondo bar foo foo ")
+  (score basic-scorer "clj foo" "foo cl0j-kondo")
+  (score basic-scorer "clj" "a clojure")
+  (score basic-scorer "clj" "a very good clojure")
 
   )
