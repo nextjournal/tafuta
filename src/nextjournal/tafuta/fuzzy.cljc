@@ -39,7 +39,7 @@
 
 (def match-score 100.0)
 (def order-score 10.0)
-(def char-penalty 1.0)
+(def char-penalty 5.0)
 (def candidate-term-penalty 2.0)
 (def allowed-misses 2)
 
@@ -104,6 +104,8 @@
 (def basic-scorer (create-fuzzy-scorer standard-pattern-splitter standard-pattern-splitter basic-score-fn))
 
 (comment
+  (score basic-scorer "h" "aha")
+  (score basic-scorer "h" "haskell two")
   (score basic-scorer "hello clj" "hello Clojure")
   (score basic-scorer "hello clojure" "hello clojure")
   (score basic-scorer "hello clojure" "hello world clojure")
