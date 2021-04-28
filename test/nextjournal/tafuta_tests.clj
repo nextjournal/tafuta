@@ -121,5 +121,5 @@
         "search-file in current directory not working")
     (is (= '({:path "src/nextjournal/tafuta.clj"}
              {:path "test/nextjournal/tafuta_tests.clj"})
-           (tafuta/search-file "tafuta*clj"))
+           (tafuta/search-file "tafuta clj"))
         "search-file with wildcard not working")))

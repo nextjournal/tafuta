@@ -128,8 +128,7 @@
 
 (comment
   (git-dir? (io/file "."))
-  (git-dir? (io/file "/"))
-  )
+  (git-dir? (io/file "/")))
 
 (defn git-files
   "Return all files currently under source control of given git root directory."
@@ -144,8 +143,7 @@
 
 (comment
   (git-files (io/file "."))
-  (git-files (io/file "/"))
-  )
+  (git-files (io/file "/")))
 
 (def start-boost 100.0)
 (def name-match-score 100.0)
@@ -153,7 +151,9 @@
 (def order-score 5.0)
 (def char-penalty 1E-10)
 
-(defn file-splitter-fn [file]
+(defn file-splitter-fn
+  "Splits a file path by \"/\""
+  [file]
   {:pre [(instance? java.io.File file)]}
   (->> (str/split (.getPath file) #"/")
        (remove empty?)
@@ -161,8 +161,7 @@
 
 (comment
   (file-splitter-fn (io/file "/foo/path/to/a/long/bar.clj"))
-  (file-splitter-fn (io/file "bar/path/foo.clj"))
-  )
+  (file-splitter-fn (io/file "bar/path/foo.clj")))
 
 (defn score-pattern [pattern candidate score]
   (when-let [index (str/index-of candidate pattern)]
@@ -172,11 +171,13 @@
 (defn score-file-fn [pattern-terms file-terms]
   (let [name (last file-terms)
         path-segments (butlast file-terms)
+        ;; matches in the file name
         name-matches (map (fn [pattern-term]
                             (when-let [score (score-pattern pattern-term name name-match-score)]
                               {:score score
                                :index (dec (count path-segments))}))
                           pattern-terms)
+        ;; matches in the file path
         path-segment-matches (map (fn [pattern-term]
                                     (->> (map-indexed (fn [i segment]
                                                         (when-let [score (score-pattern pattern-term segment path-match-score)]
@@ -185,10 +186,13 @@
                                                       path-segments)
                                          (some #(when (not= nil %1) %1))))
                                   pattern-terms)
+        ;; all matches, preferring matches in the name
         matches+scores (map #(or %1 %2) name-matches path-segment-matches)
         score (->> (concat
                     (map (fn [match1 match2]
                            (when (and match1 match2)
+                             ;; adding an order-score if the matchs maintain the same order
+                             ;; as in the pattern
                              (update match1 :score
                                      (if (< (:index match1) (:index match2)) + -)
                                      order-score)))
@@ -214,10 +218,7 @@
   (score-file (io/file "foo/bar.clj") "foo")
   (score-file (io/file "foo/bar.clj") "toto")
   (score-file (io/file "foo/bar.clj") "toto titi")
-
-  (score-file (io/file "src/nextjournal/tafuta/fuzzy.cljc") "tafuta clj")
-
-  )
+  (score-file (io/file "src/nextjournal/tafuta/fuzzy.cljc") "tafuta clj"))
 
 (defn search-file
   "Recursively searches for files matching pattern in a given directory.
@@ -234,11 +235,8 @@
 (comment
   (search "tafuta")
   (search-file "tafuta clj")
-
   (search-file "manager" (io/file "/home/fv/Code/Clojure/nextjournal/"))
   (search-file "h man" (io/file "/home/fv/Code/Clojure/nextjournal/"))
   (search-file "prepl" (io/file "/home/fv/Code/Clojure/nextjournal/"))
   (search-file "schedule" (io/file "/home/fv/Code/Clojure/nextjournal/"))
-  (search-file "runner" (io/file "/home/fv/Code/Clojure/nextjournal/"))
-
-  )
+  (search-file "runner" (io/file "/home/fv/Code/Clojure/nextjournal/")))
